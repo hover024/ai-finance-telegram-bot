@@ -1,0 +1,30 @@
+{
+  "name": "personal-finance-bot",
+  "version": "1.0.0",
+  "description": "AI-powered Telegram bot for expense tracking with voice, photo, and text support",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts"
+  },
+  "keywords": [
+    "telegram",
+    "finance",
+    "claude",
+    "google-sheets",
+    "whisper"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

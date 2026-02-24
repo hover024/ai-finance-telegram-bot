@@ -1,0 +1,13 @@
+node_modules
+venv
+.git
+.gitignore
+*.log
+.DS_Store
+.telegram-offset
+voice_*.ogg
+claude.md
+README.md
+n8n-*
+*.tar.gz
+*backup*

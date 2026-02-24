@@ -1,0 +1,48 @@
+# Environment variables (содержит токены!)
+.env
+
+# Google Service Account
+service-account.json
+*.pem
+*.key
+
+# System prompt (содержит персональные данные!)
+prompt.txt
+
+# Telegram offset
+.telegram-offset
+
+# Dependencies
+node_modules/
+venv/
+
+# Build
+dist/
+
+# n8n data directory (больше не используется)
+n8n-data/
+n8n-workflow*.json
+
+# Backups
+*.tar.gz
+*backup*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+tmp/
+temp/

@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  finance-bot:
+    build: .
+    container_name: finance-bot
+    volumes:
+      # Монтируем только необходимые файлы конфигурации
+      - ./.env:/app/.env:ro
+      - ./service-account.json:/app/service-account.json:ro
+      # Персистентный offset для отслеживания обработанных сообщений
+      - ./.telegram-offset:/app/.telegram-offset
+    restart: "no"
