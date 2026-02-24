@@ -1,13 +1,17 @@
-# Environment variables (содержит токены!)
+# Environment variables (contain secrets)
 .env
 
-# Google Service Account
+# Google Service Account (secrets)
 service-account.json
 *.pem
 *.key
 
-# System prompt (содержит персональные данные!)
-prompt.txt
+# Prompts (contain personal data)
+prompts/system.txt
+prompts/vision.txt
+
+# Keep example files in git
+!prompts/*.example.*
 
 # Telegram offset
 .telegram-offset
@@ -36,6 +40,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Claude Code CLI
+.claude/
 
 # Logs
 *.log

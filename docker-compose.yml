@@ -1,13 +1,54 @@
 version: '3.8'
 
 services:
+  whisper-service:
+    build:
+      context: ./services/whisper
+      dockerfile: Dockerfile
+    container_name: whisper-service
+    ports:
+      - "8080:8080"
+    environment:
+      - WHISPER_MODEL=small
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   finance-bot:
-    build: .
+    build:
+      context: ./services/bot
+      dockerfile: Dockerfile
     container_name: finance-bot
+    ports:
+      - "3000:3000"
     volumes:
       # Монтируем только необходимые файлы конфигурации
       - ./.env:/app/.env:ro
       - ./service-account.json:/app/service-account.json:ro
+      # AI prompts
+      - ./prompts/system.txt:/app/prompt.txt:ro
+      - ./prompts/vision.txt:/app/vision.txt:ro
       # Персистентный offset для отслеживания обработанных сообщений
       - ./.telegram-offset:/app/.telegram-offset
-    restart: "no"
+    environment:
+      - WHISPER_API_URL=http://whisper-service:8080
+      - PORT=3000
+      - POLLING_INTERVAL=300000
+    restart: unless-stopped
+    depends_on:
+      whisper-service:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

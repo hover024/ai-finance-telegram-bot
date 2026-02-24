@@ -13,7 +13,12 @@ function loadSystemPrompt(): string {
   return promptTemplate.replace('{{TODAY}}', today);
 }
 
+function loadVisionPrompt(): string {
+  return readFileSync('vision.txt', 'utf-8').trim();
+}
+
 const SYSTEM_PROMPT = loadSystemPrompt();
+const VISION_PROMPT = loadVisionPrompt();
 
 export async function analyzeText(text: string): Promise<SheetAction[]> {
   const message = await anthropic.messages.create({
@@ -53,7 +58,7 @@ export async function analyzeImage(
           },
           {
             type: 'text',
-            text: caption || 'Распознай данные транзакции с этого чека/выписки.',
+            text: caption || VISION_PROMPT,
           },
         ],
       },

@@ -1,0 +1,1 @@
+Recognize transaction data from this receipt/statement.

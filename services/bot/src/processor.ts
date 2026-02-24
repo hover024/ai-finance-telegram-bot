@@ -2,32 +2,34 @@ import { getFilePath, downloadFile, downloadVoiceAsFile } from './telegram.js';
 import { analyzeText, analyzeImage } from './claude.js';
 import { executeAction } from './sheets.js';
 import { transcribe } from './whisper.js';
+import { logger } from './logger.js';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
 import type { TelegramMessage, ProcessResult, ProcessStats } from './types.js';
 
 export async function processMessage(message: TelegramMessage): Promise<ProcessResult> {
-  console.log(`\n📨 Processing message ${message.messageId}`);
-
   let messageType = 'Text';
   if (message.hasPhoto) messageType = 'Photo';
   if (message.hasVoice) messageType = 'Voice';
 
-  console.log(`   Type: ${messageType}`);
-  console.log(`   Text: ${message.text || '(none)'}`);
+  logger.info('Processing message', {
+    messageId: message.messageId,
+    type: messageType,
+    text: message.text || '(none)',
+  });
 
   try {
     let actions;
 
     if (message.hasPhoto) {
-      console.log('   📸 Downloading photo...');
+      logger.info('Downloading photo', { messageId: message.messageId });
       const filePath = await getFilePath(message.photoId!);
       const imageBase64 = await downloadFile(filePath);
 
-      console.log('   🤖 Sending to Claude Vision API...');
+      logger.info('Sending to Claude Vision API', { messageId: message.messageId });
       actions = await analyzeImage(imageBase64, message.text);
     } else if (message.hasVoice) {
-      console.log('   🎤 Downloading voice message...');
+      logger.info('Downloading voice message', { messageId: message.messageId });
       const filePath = await getFilePath(message.voiceId!);
 
       const tempFileName = `voice_${randomBytes(8).toString('hex')}.ogg`;
@@ -35,36 +37,50 @@ export async function processMessage(message: TelegramMessage): Promise<ProcessR
 
       await downloadVoiceAsFile(filePath, tempFilePath);
 
-      console.log('   🗣️  Transcribing via Whisper...');
+      logger.info('Transcribing via Whisper', { messageId: message.messageId });
       const transcribedText = await transcribe(tempFilePath);
-      console.log(`   📝 Recognized: "${transcribedText}"`);
+      logger.info('Transcription complete', {
+        messageId: message.messageId,
+        text: transcribedText,
+      });
 
-      console.log('   🤖 Sending to Claude API...');
+      logger.info('Sending to Claude API', { messageId: message.messageId });
       actions = await analyzeText(transcribedText);
     } else if (message.text) {
-      console.log('   🤖 Sending to Claude API...');
+      logger.info('Sending to Claude API', { messageId: message.messageId });
       actions = await analyzeText(message.text);
     } else {
-      console.log('   ⚠️  No text, photo or voice, skipping');
+      logger.info('No text, photo or voice, skipping', { messageId: message.messageId });
       return { success: false, reason: 'No text, photo or voice' };
     }
 
-    console.log(`   ✓ Claude returned ${actions.length} actions`);
+    logger.info('Claude returned actions', {
+      messageId: message.messageId,
+      actionCount: actions.length,
+    });
 
     const results = [];
     for (const action of actions) {
-      console.log(`   📝 Executing: ${action.action} in ${action.sheet}`);
+      logger.info('Executing action', {
+        messageId: message.messageId,
+        action: action.action,
+        sheet: action.sheet,
+      });
       const result = await executeAction(action);
       results.push(result);
 
       if (action.action === 'append' && action.data) {
-        console.log(
-          `      ✓ ${action.data.type}: ${action.data.amount} ${action.data.currency} - ${action.data.category}`
-        );
+        logger.info('Transaction recorded', {
+          messageId: message.messageId,
+          type: action.data.type,
+          amount: action.data.amount,
+          currency: action.data.currency,
+          category: action.data.category,
+        });
       }
     }
 
-    console.log('   ✅ Successfully processed');
+    logger.info('Message processed successfully', { messageId: message.messageId });
 
     return {
       success: true,
@@ -73,7 +89,10 @@ export async function processMessage(message: TelegramMessage): Promise<ProcessR
       results,
     };
   } catch (error: any) {
-    console.error(`   ❌ Error: ${error.message}`);
+    logger.error('Message processing failed', {
+      messageId: message.messageId,
+      error: error.message,
+    });
     return {
       success: false,
       messageId: message.messageId,

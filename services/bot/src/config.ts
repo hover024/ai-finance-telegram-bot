@@ -20,6 +20,14 @@ export const config = {
   accounts: {
     default: process.env.DEFAULT_ACCOUNT || 'Bank Account',
   },
+  whisper: {
+    apiUrl: process.env.WHISPER_API_URL || 'http://whisper-service:8080',
+  },
+  server: {
+    port: parseInt(process.env.PORT || '3000'),
+    webhookUrl: process.env.WEBHOOK_URL,
+    pollingInterval: parseInt(process.env.POLLING_INTERVAL || '300000'),
+  },
 };
 
 export function validateConfig(): boolean {
