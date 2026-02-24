@@ -48,10 +48,15 @@ export function validateConfig(): boolean {
     }
   }
 
-  try {
-    readFileSync(config.googleSheets.serviceAccountPath);
-  } catch {
-    throw new Error(`Service account file not found: ${config.googleSheets.serviceAccountPath}`);
+  // Check for service account credentials (either env var or file)
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT) {
+    try {
+      readFileSync(config.googleSheets.serviceAccountPath);
+    } catch {
+      throw new Error(
+        `Service account not configured. Either set GOOGLE_SERVICE_ACCOUNT env var or provide ${config.googleSheets.serviceAccountPath} file`
+      );
+    }
   }
 
   return true;

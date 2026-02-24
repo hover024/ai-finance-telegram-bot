@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { config } from './config.js';
 import type { SheetAction } from './types.js';
 
@@ -10,9 +10,17 @@ const anthropic = new Anthropic({
 function loadSystemPrompt(): string {
   // Try to get prompt from environment variable first (for deployment)
   // If not found, fall back to file (for local development)
-  const promptTemplate = process.env.SYSTEM_PROMPT
-    ? process.env.SYSTEM_PROMPT
-    : readFileSync('prompt.txt', 'utf-8');
+  let promptTemplate: string;
+
+  if (process.env.SYSTEM_PROMPT) {
+    promptTemplate = process.env.SYSTEM_PROMPT;
+  } else if (existsSync('prompt.txt')) {
+    promptTemplate = readFileSync('prompt.txt', 'utf-8');
+  } else {
+    throw new Error(
+      'System prompt not configured. Either set SYSTEM_PROMPT env var or provide prompt.txt file'
+    );
+  }
 
   const today = new Date().toISOString().split('T')[0];
   return promptTemplate.replace('{{TODAY}}', today);
@@ -21,9 +29,15 @@ function loadSystemPrompt(): string {
 function loadVisionPrompt(): string {
   // Try to get prompt from environment variable first (for deployment)
   // If not found, fall back to file (for local development)
-  return process.env.VISION_PROMPT
-    ? process.env.VISION_PROMPT.trim()
-    : readFileSync('vision.txt', 'utf-8').trim();
+  if (process.env.VISION_PROMPT) {
+    return process.env.VISION_PROMPT.trim();
+  } else if (existsSync('vision.txt')) {
+    return readFileSync('vision.txt', 'utf-8').trim();
+  } else {
+    throw new Error(
+      'Vision prompt not configured. Either set VISION_PROMPT env var or provide vision.txt file'
+    );
+  }
 }
 
 const SYSTEM_PROMPT = loadSystemPrompt();
