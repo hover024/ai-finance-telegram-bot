@@ -17,6 +17,18 @@ app.get('/health', (_req: Request, res: Response) => {
 // Webhook endpoint for Telegram
 app.post('/webhook', async (req: Request, res: Response) => {
   try {
+    // Validate secret token if configured
+    if (config.server.webhookSecretToken) {
+      const receivedToken = req.headers['x-telegram-bot-api-secret-token'];
+      if (receivedToken !== config.server.webhookSecretToken) {
+        logger.warn('Webhook request with invalid secret token', {
+          receivedToken,
+          ip: req.ip,
+        });
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+    }
+
     const update = req.body;
 
     if (!update || !update.update_id) {

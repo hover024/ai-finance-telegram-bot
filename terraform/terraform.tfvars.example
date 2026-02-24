@@ -1,0 +1,13 @@
+# Copy this file to terraform.tfvars and fill in your values
+# cp terraform.tfvars.example terraform.tfvars
+
+project_id = "your-gcp-project-id"
+region     = "europe-west1"
+
+telegram_bot_token         = "your-telegram-bot-token"
+claude_api_key            = "your-claude-api-key"
+google_sheet_id           = "your-google-sheet-id"
+google_service_account_json = "{\"type\":\"service_account\",...}" # Single line JSON
+system_prompt             = "Your system prompt here..."
+vision_prompt             = "Your vision prompt here..."
+default_account           = "Santander PLN"

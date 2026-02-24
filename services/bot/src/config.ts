@@ -26,6 +26,7 @@ export const config = {
   server: {
     port: parseInt(process.env.PORT || '3000'),
     webhookUrl: process.env.WEBHOOK_URL,
+    webhookSecretToken: process.env.WEBHOOK_SECRET_TOKEN,
     pollingInterval: parseInt(process.env.POLLING_INTERVAL || '300000'),
   },
   queue: {
