@@ -14,6 +14,9 @@ RUN pip install --no-cache-dir \
     flask==3.0.0 \
     requests==2.31.0
 
+# Pre-download Whisper model to include it in the image
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')"
+
 # Copy server script
 COPY server.py .
 
