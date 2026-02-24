@@ -8,7 +8,7 @@ export async function getUpdates(offset: number | null = null): Promise<any[]> {
   const url = new URL(`${BASE_URL}/getUpdates`);
   const params: any = {
     timeout: 0,
-    allowed_updates: ['message'],
+    allowed_updates: [], // Empty array = receive all update types
   };
 
   if (offset !== null) {
@@ -64,6 +64,20 @@ export function parseUpdate(update: any): TelegramMessage | null {
 
   if (!message) {
     return null;
+  }
+
+  // Log message details to debug shortcuts
+  if (message.from) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'debug',
+      service: 'finance-bot',
+      message: 'Parsing message',
+      from_id: message.from.id,
+      from_is_bot: message.from.is_bot,
+      from_username: message.from.username,
+      message_text: message.text || message.caption || '',
+    }));
   }
 
   return {
