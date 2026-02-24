@@ -28,6 +28,7 @@ export const config = {
     webhookUrl: process.env.WEBHOOK_URL,
     webhookSecretToken: process.env.WEBHOOK_SECRET_TOKEN,
     pollingInterval: parseInt(process.env.POLLING_INTERVAL || '300000'),
+    shortcutsApiKey: process.env.SHORTCUTS_API_KEY,
   },
   queue: {
     processInterval: parseInt(process.env.QUEUE_PROCESS_INTERVAL || '3600000'),

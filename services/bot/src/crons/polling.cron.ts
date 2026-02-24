@@ -1,11 +1,54 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { config } from './config.js';
-import { logger } from './logger.js';
-import { getUpdates, parseUpdate } from './telegram.js';
-import { processMessage } from './processor.js';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+import { telegramClient } from '../integrations/telegram/telegram.client.js';
+import { messageProcessorService } from '../services/message-processor.service.js';
+import type { TelegramMessage } from '../types.js';
 
 const OFFSET_FILE = '.telegram-offset';
 
+/**
+ * Parse Telegram update into normalized TelegramMessage format
+ */
+function parseUpdate(update: any): TelegramMessage | null {
+  const message = update.message;
+
+  if (!message) {
+    return null;
+  }
+
+  // Log message details to debug shortcuts
+  if (message.from) {
+    console.log(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'debug',
+        service: 'finance-bot',
+        message: 'Parsing message',
+        from_id: message.from.id,
+        from_is_bot: message.from.is_bot,
+        from_username: message.from.username,
+        message_text: message.text || message.caption || '',
+      })
+    );
+  }
+
+  return {
+    updateId: update.update_id,
+    messageId: message.message_id,
+    text: message.text || message.caption || '',
+    hasPhoto: !!message.photo,
+    photoId: message.photo ? message.photo[message.photo.length - 1].file_id : null,
+    hasVoice: !!message.voice,
+    voiceId: message.voice ? message.voice.file_id : null,
+    voiceDuration: message.voice ? message.voice.duration : null,
+    date: new Date(message.date * 1000).toISOString(),
+  };
+}
+
+/**
+ * Load the last processed update ID offset
+ */
 function loadOffset(): number | null {
   try {
     if (existsSync(OFFSET_FILE)) {
@@ -18,6 +61,9 @@ function loadOffset(): number | null {
   return null;
 }
 
+/**
+ * Save the current update ID offset
+ */
 function saveOffset(offset: number): void {
   try {
     writeFileSync(OFFSET_FILE, offset.toString());
@@ -26,12 +72,15 @@ function saveOffset(offset: number): void {
   }
 }
 
+/**
+ * Poll Telegram for updates once
+ */
 async function pollOnce(): Promise<void> {
   try {
     const offset = loadOffset();
     logger.info('Polling for updates', { offset: offset || 'start' });
 
-    const updates = await getUpdates(offset);
+    const updates = await telegramClient.getUpdates(offset);
 
     if (updates.length === 0) {
       logger.info('No new updates');
@@ -45,7 +94,7 @@ async function pollOnce(): Promise<void> {
       const message = parseUpdate(update);
       if (message) {
         try {
-          await processMessage(message);
+          await messageProcessorService.processMessage(message);
           logger.info('Message processed', {
             updateId: update.update_id,
             messageId: message.messageId,
@@ -73,6 +122,9 @@ async function pollOnce(): Promise<void> {
   }
 }
 
+/**
+ * Start Telegram long polling
+ */
 export function startPolling(): void {
   const interval = config.server.pollingInterval;
 

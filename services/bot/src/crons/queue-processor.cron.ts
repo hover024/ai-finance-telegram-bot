@@ -1,10 +1,13 @@
-import { logger } from './logger.js';
-import { config } from './config.js';
-import { getQueue, updateQueue, getQueueSize } from './queue.js';
-import { processMessage } from './processor.js';
+import { logger } from '../logger.js';
+import { config } from '../config.js';
+import { queueService } from '../services/queue.service.js';
+import { messageProcessorService } from '../services/message-processor.service.js';
 
+/**
+ * Process all messages in the queue
+ */
 export async function processQueuedMessages(): Promise<void> {
-  const queue = getQueue();
+  const queue = await queueService.getQueue();
 
   if (queue.length === 0) {
     return;
@@ -21,7 +24,7 @@ export async function processQueuedMessages(): Promise<void> {
         retries: item.retries,
       });
 
-      const result = await processMessage(item.message);
+      const result = await messageProcessorService.processMessage(item.message);
 
       if (result.success) {
         logger.info('Queued message processed successfully', {
@@ -70,7 +73,7 @@ export async function processQueuedMessages(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
-  updateQueue(updatedQueue);
+  await queueService.updateQueue(updatedQueue);
 
   logger.info('Queue processing complete', {
     processed: queue.length - updatedQueue.length,
@@ -78,6 +81,9 @@ export async function processQueuedMessages(): Promise<void> {
   });
 }
 
+/**
+ * Start queue processor cron job
+ */
 export function startQueueProcessor(): void {
   logger.info('Queue processor started', {
     intervalMs: config.queue.processInterval,
@@ -85,13 +91,14 @@ export function startQueueProcessor(): void {
   });
 
   // Process queue immediately on start
-  const initialQueueSize = getQueueSize();
-  if (initialQueueSize > 0) {
-    logger.info('Found queued messages on startup', { count: initialQueueSize });
-    processQueuedMessages().catch((error) => {
-      logger.error('Failed to process initial queue', { error: error.message });
-    });
-  }
+  queueService.getQueueSize().then((initialQueueSize) => {
+    if (initialQueueSize > 0) {
+      logger.info('Found queued messages on startup', { count: initialQueueSize });
+      processQueuedMessages().catch((error) => {
+        logger.error('Failed to process initial queue', { error: error.message });
+      });
+    }
+  });
 
   // Then process periodically
   setInterval(() => {

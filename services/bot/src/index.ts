@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { validateConfig } from './config.js';
-import { initSheetsClient } from './sheets.js';
+import { sheetsClient } from './integrations/sheets/sheets.client.js';
 import { startServer } from './server.js';
-import { startPolling } from './polling.js';
-import { startQueueProcessor } from './queueProcessor.js';
+import { startPolling } from './crons/polling.cron.js';
+import { startQueueProcessor } from './crons/queue-processor.cron.js';
 import { logger } from './logger.js';
 
 async function main() {
@@ -21,14 +21,14 @@ async function main() {
 
   // Initialize Google Sheets client
   try {
-    initSheetsClient();
+    sheetsClient.init();
     logger.info('Google Sheets client initialized');
   } catch (error: any) {
     logger.error('Google Sheets initialization failed', { error: error.message });
     process.exit(1);
   }
 
-  // Start HTTP server (for webhook)
+  // Start HTTP server (for webhook & shortcuts API)
   try {
     startServer();
   } catch (error: any) {
