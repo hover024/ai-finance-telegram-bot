@@ -3,6 +3,7 @@ import { analyzeText, analyzeImage } from './claude.js';
 import { executeAction } from './sheets.js';
 import { transcribe } from './whisper.js';
 import { logger } from './logger.js';
+import { saveToQueue } from './queue.js';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
 import type { TelegramMessage, ProcessResult, ProcessStats } from './types.js';
@@ -89,6 +90,28 @@ export async function processMessage(message: TelegramMessage): Promise<ProcessR
       results,
     };
   } catch (error: any) {
+    // Check if it's a Claude API error that suggests saving to queue
+    const isClaudeApiError =
+      error.status === 429 || // Rate limit
+      error.status === 402 || // Payment required
+      error.status === 529 || // Overloaded
+      (error.message && error.message.includes('credit balance'));
+
+    if (isClaudeApiError) {
+      logger.warn('Claude API error, saving to queue', {
+        messageId: message.messageId,
+        error: error.message,
+        status: error.status,
+      });
+      saveToQueue(message);
+      return {
+        success: false,
+        messageId: message.messageId,
+        error: error.message,
+        queued: true,
+      };
+    }
+
     logger.error('Message processing failed', {
       messageId: message.messageId,
       error: error.message,

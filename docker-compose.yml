@@ -37,8 +37,9 @@ services:
       # AI prompts
       - ./prompts/system.txt:/app/prompt.txt:ro
       - ./prompts/vision.txt:/app/vision.txt:ro
-      # Персистентный offset для отслеживания обработанных сообщений
+      # Персистентные данные
       - ./.telegram-offset:/app/.telegram-offset
+      - ./message-queue.json:/app/message-queue.json
     environment:
       - WHISPER_API_URL=http://whisper-service:8080
     restart: unless-stopped

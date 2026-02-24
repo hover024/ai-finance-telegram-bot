@@ -12,6 +12,7 @@ AI-powered Telegram bot for expense tracking with voice, photo, and text support
 - 🏦 **Multiple accounts**: Track different bank accounts, cash, etc.
 - ⚡ **Always-on service**: Instant webhook processing + periodic polling fallback
 - 🔄 **Auto-restart**: Resilient microservices with health checks
+- 💾 **Message queue**: Saves messages when API unavailable, retries automatically
 
 ## Architecture
 
@@ -22,11 +23,12 @@ The system consists of two microservices:
 │  whisper-service    │     │   finance-bot            │
 │  (always-on)        │     │   (always-on)            │
 │                     │     │                          │
-│  whisper.cpp        │◄────│  Express HTTP Server     │
-│  HTTP API :8080     │     │  ├─ Webhook endpoint     │
-│  ggml-small.bin     │     │  ├─ Periodic polling     │
-│  restart: always    │     │  ├─ Claude AI            │
-└─────────────────────┘     │  └─ Google Sheets        │
+│  faster-whisper     │◄────│  Express HTTP Server     │
+│  Flask :8080        │     │  ├─ Webhook endpoint     │
+│  small model        │     │  ├─ Periodic polling     │
+│  restart: always    │     │  ├─ Message queue        │
+└─────────────────────┘     │  ├─ Claude AI            │
+                            │  └─ Google Sheets        │
                             └──────────────────────────┘
                                      ▲
                                      │ webhook
@@ -92,17 +94,7 @@ Where `Dashboard!$B$4` contains the exchange rate.
 7. Copy the service account email
 8. Open your Google Sheet → **Share** → paste email → give **Editor** access
 
-### 4. Download Whisper Model
-
-Download the AI model for voice transcription:
-
-```bash
-./scripts/download-models.sh
-```
-
-This downloads `ggml-small.bin` (~466 MB) to the `models/` directory.
-
-### 5. Configure Environment
+### 4. Configure Environment
 
 Copy `.env.example` to `.env`:
 
@@ -118,15 +110,19 @@ CLAUDE_API_KEY=sk-ant-api03-your-key
 GOOGLE_SHEET_ID=your-sheet-id
 DEFAULT_ACCOUNT=Bank Account
 
-# Whisper service (default is fine for Docker Compose)
-WHISPER_API_URL=http://whisper-service:8080
+# Port configuration (external ports)
+BOT_PORT=3100
+WHISPER_PORT=8180
 
 # Server configuration
-PORT=3000
-POLLING_INTERVAL=300000  # 5 minutes
+POLLING_INTERVAL=300000  # 5 minutes (300000ms)
+
+# Queue processing (for failed messages when Claude API unavailable)
+QUEUE_PROCESS_INTERVAL=3600000  # 1 hour (3600000ms)
+QUEUE_MAX_RETRIES=5  # Maximum retry attempts before dropping message
 
 # Webhook (optional, for production)
-WEBHOOK_URL=
+WEBHOOK_URL=https://your-domain.com/webhook
 ```
 
 The `GOOGLE_SHEET_ID` is from the spreadsheet URL:
@@ -134,19 +130,22 @@ The `GOOGLE_SHEET_ID` is from the spreadsheet URL:
 https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit
 ```
 
-### 6. Customize AI Prompt
+### 5. Customize AI Prompts
 
-Copy `prompt.example.txt` to `prompt.txt`:
+Copy example prompts to create your own:
 
 ```bash
-cp prompt.example.txt prompt.txt
+cp prompts/system.example.txt prompts/system.txt
+cp prompts/vision.example.txt prompts/vision.txt
 ```
 
-Edit `prompt.txt` to match your:
+Edit `prompts/system.txt` to match your:
 - Account names
 - Categories
 - Currency preferences
 - Parsing rules
+
+Edit `prompts/vision.txt` for receipt photo processing preferences.
 
 ## Running
 
@@ -302,21 +301,34 @@ docker stats
 ## Project Structure
 
 ```
-src/
-├── index.ts       - Main entry point (always-on service)
-├── server.ts      - Express HTTP server + webhook
-├── polling.ts     - Periodic polling fallback
-├── processor.ts   - Message processing orchestration
-├── whisper.ts     - Whisper HTTP client
-├── telegram.ts    - Telegram Bot API client
-├── claude.ts      - Claude AI integration
-├── sheets.ts      - Google Sheets API
-├── logger.ts      - Structured logging
-├── config.ts      - Configuration management
-└── types.ts       - TypeScript interfaces
+services/
+├── bot/
+│   ├── src/
+│   │   ├── index.ts          - Main entry point (always-on service)
+│   │   ├── server.ts         - Express HTTP server + webhook
+│   │   ├── polling.ts        - Periodic polling fallback
+│   │   ├── processor.ts      - Message processing orchestration
+│   │   ├── queue.ts          - Queue management functions
+│   │   ├── queueProcessor.ts - Periodic queue processing
+│   │   ├── whisper.ts        - Whisper HTTP client
+│   │   ├── telegram.ts       - Telegram Bot API client
+│   │   ├── claude.ts         - Claude AI integration
+│   │   ├── sheets.ts         - Google Sheets API
+│   │   ├── logger.ts         - Structured logging
+│   │   ├── config.ts         - Configuration management
+│   │   └── types.ts          - TypeScript interfaces
+│   └── package.json          - Dependencies
+└── whisper/
+    ├── server.py             - Flask HTTP server
+    └── requirements.txt      - Python dependencies
+
+prompts/
+├── system.txt            - AI prompt (gitignored, customize this)
+├── system.example.txt    - AI prompt template
+├── vision.txt            - Vision prompt (gitignored)
+└── vision.example.txt    - Vision prompt template
 
 scripts/
-├── download-models.sh    - Download Whisper model
 ├── setup-webhook.sh      - Configure Telegram webhook
 └── check-webhook.sh      - Verify webhook status
 
@@ -324,9 +336,8 @@ docs/
 ├── ARCHITECTURE.md   - Detailed system architecture
 └── DEPLOYMENT.md     - Production deployment guide
 
-models/               - Whisper AI models (gitignored)
-prompt.txt           - AI prompt (customize this)
-docker-compose.yml   - Service orchestration
+docker-compose.yml    - Service orchestration
+message-queue.json    - Failed message queue (gitignored)
 ```
 
 ## Tech Stack
@@ -339,9 +350,9 @@ docker-compose.yml   - Service orchestration
 - Telegram Bot API
 
 **Whisper Service**:
-- whisper.cpp (C++ implementation)
-- ggml-small.bin model
-- HTTP API server
+- faster-whisper (Python with CTranslate2)
+- small model
+- Flask HTTP server
 
 **Infrastructure**:
 - Docker + Docker Compose
@@ -353,17 +364,51 @@ docker-compose.yml   - Service orchestration
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: Detailed system architecture, data flows, and design decisions
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**: Production deployment guide, monitoring, and troubleshooting
 
+## Message Queue System
+
+The bot includes an automatic message queue that handles temporary Claude API outages:
+
+**When messages are queued**:
+- Claude API out of credits (402 Payment Required)
+- Rate limits exceeded (429 Too Many Requests)
+- Service temporarily overloaded (529)
+
+**How it works**:
+1. Message fails to process → Saved to `message-queue.json`
+2. Bot responds: "Message queued for processing"
+3. Every hour, bot retries all queued messages
+4. On success → Message processed and written to Sheets
+5. After 5 failed retries → Message dropped from queue
+
+**Checking queue status**:
+```bash
+# View queued messages
+cat message-queue.json
+
+# Watch queue processing in logs
+docker-compose logs -f finance-bot | grep -i queue
+```
+
+**Configuration**:
+- Retry interval: `QUEUE_PROCESS_INTERVAL` (default: 1 hour)
+- Max retries: `QUEUE_MAX_RETRIES` (default: 5)
+
 ## Troubleshooting
 
 **Bot not responding?**
 1. Check logs: `docker-compose logs -f finance-bot`
 2. Verify services are running: `docker-compose ps`
-3. Test health endpoints: `curl http://localhost:3000/health`
+3. Test health endpoints: `curl http://localhost:3100/health`
 
 **Voice messages not working?**
 1. Check Whisper service: `docker-compose logs whisper-service`
-2. Verify model loaded: `curl http://localhost:8080/`
+2. Verify model loaded: `curl http://localhost:8180/`
 3. Test transcription directly (see DEPLOYMENT.md)
+
+**Claude API out of credits?**
+- Messages automatically saved to queue
+- Bot will retry every hour
+- Add credits and messages will process automatically
 
 **Webhook not working?**
 - Polling fallback will catch messages within 5 minutes automatically

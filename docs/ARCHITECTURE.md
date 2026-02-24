@@ -24,30 +24,31 @@ graph TB
 
 ### Whisper Service
 
-**Technology**: whisper.cpp with HTTP server
+**Technology**: faster-whisper (Python) with Flask HTTP server
 **Container**: `whisper-service`
-**Port**: 8080
+**Port**: 8080 (configurable via WHISPER_PORT env variable)
 **Restart Policy**: `unless-stopped`
 
 **Responsibilities**:
-- Loads Whisper AI model (`ggml-small.bin`) on startup
+- Loads Whisper AI model (`small`) on startup
 - Keeps model warm in memory for fast inference
 - Exposes HTTP API endpoint: `POST /inference`
 - Accepts audio files via multipart/form-data
 - Returns transcription as JSON: `{"text": "..."}`
-- Configured for Russian language (`-l ru`)
+- Configured for Russian language with beam_size=5
 
 **Key Benefits**:
 - Model loaded once, not per-request
 - Isolated from bot logic
 - Can be scaled independently
 - Dedicated resources for AI workload
+- Native ARM64/Apple Silicon support
 
 ### Finance Bot Service
 
 **Technology**: Node.js + TypeScript + Express
 **Container**: `finance-bot`
-**Port**: 3000
+**Port**: 3000 (configurable via BOT_PORT env variable)
 **Restart Policy**: `unless-stopped`
 
 **Responsibilities**:
@@ -57,6 +58,8 @@ graph TB
 - Sends audio to Whisper service for transcription
 - Sends text/images to Claude API for analysis
 - Writes transactions to Google Sheets
+- Queues failed messages for retry when Claude API is unavailable
+- Processes queued messages periodically
 - Structured JSON logging
 
 **Key Components**:
@@ -64,6 +67,8 @@ graph TB
 - `src/polling.ts`: Periodic polling with offset management
 - `src/whisper.ts`: HTTP client for Whisper service
 - `src/processor.ts`: Message processing orchestration
+- `src/queue.ts`: Queue management for failed messages
+- `src/queueProcessor.ts`: Periodic queue processing with retry logic
 - `src/logger.ts`: Structured logging
 
 ## Operating Modes
@@ -111,6 +116,11 @@ Every 5 minutes → Bot calls getUpdates → Processes new messages → Updates 
 - Offset stored in `.telegram-offset` file
 - Prevents duplicate processing
 
+**Queue Configuration**:
+- Processing interval: `QUEUE_PROCESS_INTERVAL` env variable (default: 3600000ms = 1 hour)
+- Max retries: `QUEUE_MAX_RETRIES` env variable (default: 5)
+- Queue file: `message-queue.json` (persisted via Docker volume)
+
 ### Hybrid Approach
 
 Both modes run simultaneously:
@@ -122,6 +132,49 @@ Both modes run simultaneously:
 - Webhook down → Polling catches messages within 5 minutes
 - Internet outage → Polling fetches all missed messages after recovery
 - Bot restart → Offset prevents reprocessing old messages
+
+### Message Queue System
+
+**Purpose**: Handles situations when Claude API is temporarily unavailable (out of credits, rate limits, service outages).
+
+**How It Works**:
+```
+Message → Claude API call fails → Save to queue → Retry periodically
+```
+
+**Queue Triggers**:
+- HTTP 429 (Rate limit exceeded)
+- HTTP 402 (Payment required - no credits)
+- HTTP 529 (Service overloaded)
+- Error message contains "credit balance"
+
+**Queue Processing**:
+- Runs every hour by default (configurable via `QUEUE_PROCESS_INTERVAL`)
+- Retries each queued message
+- Increments retry counter on failure
+- Removes from queue on success
+- Drops message after max retries (default: 5, configurable via `QUEUE_MAX_RETRIES`)
+
+**Persistence**:
+- Queue stored in `message-queue.json` file
+- Volume-mounted for persistence across container restarts
+- Each item includes: message data, timestamp, retry count
+
+**Benefits**:
+- Zero message loss during temporary API outages
+- Automatic recovery when service restored
+- Prevents user frustration from lost expenses
+- Configurable retry strategy
+
+**Example Flow**:
+```
+1. User sends: "coffee 20 USD"
+2. Bot processes → Claude API returns 402 (no credits)
+3. Bot saves to queue → Responds to user: "Message queued for processing"
+4. After 1 hour → Queue processor retries
+5. Claude API restored → Message processed → Written to Sheets
+6. Message removed from queue
+```
 
 ## Communication Patterns
 
@@ -187,6 +240,32 @@ sequenceDiagram
     B->>U: ✅
 ```
 
+### Queue Recovery Flow (Claude API Unavailable)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Bot
+    participant C as Claude API
+    participant Q as Queue
+    participant S as Sheets
+
+    Note over B,C: Normal operation fails
+    U->>B: Send message
+    B->>C: Process message
+    C-->>B: 402 Payment Required (no credits)
+    B->>Q: Save to queue
+    B->>U: Message queued for processing
+
+    Note over Q: 1 hour later...
+    Q->>B: Queue processor retry
+    B->>C: Retry message
+    C->>B: Success (credits restored)
+    B->>S: Write to sheets
+    B->>Q: Remove from queue
+    Note over U: User sees transaction in sheets
+```
+
 ## Data Flow
 
 ### Message Processing Pipeline
@@ -213,9 +292,15 @@ Input → Detection → Download → AI Processing → Sheet Writing → Cleanup
 **4. Sheet Writing**:
 - Claude returns structured actions
 - Execute append operation on Transactions sheet
+- Copy formatting from previous row
 - Formula for PLN conversion applied automatically
 
-**5. Cleanup**:
+**5. Error Handling**:
+- If Claude API fails (no credits, rate limit, outage)
+- Save message to queue for later retry
+- Notify user that message is queued
+
+**6. Cleanup**:
 - Delete temporary audio files
 - Log results
 - Update offset (if polling)
@@ -422,7 +507,8 @@ docker-compose logs finance-bot | jq -r 'select(.message | contains("Whisper"))'
 | HTTP Server | Express | Webhook endpoint |
 | HTTP Client | undici | Whisper API calls |
 | AI - NLP | Claude API | Text/image analysis |
-| AI - Speech | Whisper.cpp | Voice transcription |
+| AI - Speech | faster-whisper (Python) | Voice transcription |
+| Message Queue | JSON file | Failed message persistence |
 | Data Storage | Google Sheets API | Transaction records |
 | Container Runtime | Docker Compose | Service orchestration |
 | Audio Processing | ffmpeg | Audio format conversion |
@@ -431,30 +517,44 @@ docker-compose logs finance-bot | jq -r 'select(.message | contains("Whisper"))'
 
 ```
 .
-├── src/
-│   ├── index.ts          # Main entry point (always-on service)
-│   ├── server.ts         # Express HTTP server + webhook
-│   ├── polling.ts        # Periodic polling fallback
-│   ├── processor.ts      # Message processing orchestration
-│   ├── whisper.ts        # Whisper HTTP client
-│   ├── telegram.ts       # Telegram API client
-│   ├── claude.ts         # Claude API client
-│   ├── sheets.ts         # Google Sheets client
-│   ├── logger.ts         # Structured logging
-│   ├── config.ts         # Configuration management
-│   └── types.ts          # TypeScript interfaces
+├── services/
+│   ├── bot/
+│   │   ├── src/
+│   │   │   ├── index.ts          # Main entry point (always-on service)
+│   │   │   ├── server.ts         # Express HTTP server + webhook
+│   │   │   ├── polling.ts        # Periodic polling fallback
+│   │   │   ├── processor.ts      # Message processing orchestration
+│   │   │   ├── queue.ts          # Queue management functions
+│   │   │   ├── queueProcessor.ts # Periodic queue processing
+│   │   │   ├── whisper.ts        # Whisper HTTP client
+│   │   │   ├── telegram.ts       # Telegram API client
+│   │   │   ├── claude.ts         # Claude API client
+│   │   │   ├── sheets.ts         # Google Sheets client
+│   │   │   ├── logger.ts         # Structured logging
+│   │   │   ├── config.ts         # Configuration management
+│   │   │   └── types.ts          # TypeScript interfaces
+│   │   ├── Dockerfile            # Bot container image
+│   │   └── package.json          # Node.js dependencies
+│   └── whisper/
+│       ├── server.py             # Flask HTTP server
+│       ├── Dockerfile            # Whisper container image
+│       └── requirements.txt      # Python dependencies
+├── prompts/
+│   ├── system.txt            # AI prompt (gitignored, customize this)
+│   ├── system.example.txt    # AI prompt template
+│   ├── vision.txt            # Vision prompt (gitignored)
+│   └── vision.example.txt    # Vision prompt template
 ├── scripts/
-│   ├── download-models.sh    # Download Whisper model
 │   ├── setup-webhook.sh      # Configure Telegram webhook
 │   └── check-webhook.sh      # Verify webhook status
 ├── docs/
-│   ├── ARCHITECTURE.md   # This file
-│   └── DEPLOYMENT.md     # Deployment guide
-├── models/               # Whisper model files (gitignored)
-├── docker-compose.yml    # Service definitions
-├── Dockerfile            # Bot container image
-├── package.json          # Node.js dependencies
-└── .env                  # Environment variables
+│   ├── ARCHITECTURE.md       # This file
+│   └── DEPLOYMENT.md         # Deployment guide
+├── docker-compose.yml        # Service definitions
+├── service-account.json      # Google service account (gitignored)
+├── message-queue.json        # Failed message queue (gitignored)
+├── .telegram-offset          # Polling offset (gitignored)
+└── .env                      # Environment variables (gitignored)
 ```
 
 ## Design Decisions
@@ -470,18 +570,25 @@ docker-compose logs finance-bot | jq -r 'select(.message | contains("Whisper"))'
 - Isolated failures
 - Easier testing and deployment
 
-### Why whisper.cpp Over Python?
+### Why faster-whisper?
 
-**whisper.cpp advantages**:
-- 4-8x faster inference
-- Lower memory usage
-- No Python runtime needed
-- Optimized C++ implementation
-- HTTP API out of the box
+**faster-whisper advantages**:
+- 4x faster than original Whisper (uses CTranslate2)
+- Native ARM64/Apple Silicon support
+- Python-based for easier customization
+- Lower memory usage than original Whisper
+- Simple HTTP server integration with Flask
+- Good balance between performance and compatibility
 
 **Trade-offs**:
-- More complex setup (model download)
-- Less flexibility than Python API
+- Slightly slower than whisper.cpp on x86_64
+- Requires Python runtime
+- More memory than pure C++ implementation
+
+**Implementation Choice**:
+- Initially planned whisper.cpp but lacked ARM64 support
+- Switched to faster-whisper for better compatibility
+- Works well on both x86_64 and Apple Silicon
 
 ### Why Hybrid Webhook + Polling?
 
@@ -505,6 +612,31 @@ docker-compose logs finance-bot | jq -r 'select(.message | contains("Whisper"))'
 
 **Alternative considered**: Native Node.js `http` module
 **Decision**: Express simplicity outweighs minimal overhead
+
+### Why Message Queue for Failed Messages?
+
+**Problem**: Claude API temporary unavailability
+- Credits exhausted (402 Payment Required)
+- Rate limits (429 Too Many Requests)
+- Service overloaded (529)
+- Scheduled maintenance
+
+**Solution**: Persistent message queue with retry logic
+
+**Benefits**:
+- Zero message loss during API outages
+- Automatic recovery when credits restored
+- User doesn't need to re-send messages
+- Configurable retry strategy
+
+**Implementation choices**:
+- **File-based queue**: Simple JSON file, no extra dependencies
+- **Hourly retry**: Balance between recovery speed and API pressure
+- **Max 5 retries**: Prevents infinite loops for truly invalid messages
+- **Volume-mounted**: Survives container restarts
+
+**Alternative considered**: External queue (Redis, RabbitMQ)
+**Decision**: File-based sufficient for single-instance personal use, can migrate later if needed
 
 ## Future Enhancements
 

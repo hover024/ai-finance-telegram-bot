@@ -34,6 +34,7 @@ export interface ProcessResult {
   results?: unknown[];
   error?: string;
   reason?: string;
+  queued?: boolean;
 }
 
 export interface ProcessStats {

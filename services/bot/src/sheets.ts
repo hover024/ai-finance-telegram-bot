@@ -57,6 +57,47 @@ export async function appendRow(sheetName: string, data: TransactionData) {
     requestBody: { values },
   });
 
+  // Copy formatting from previous row
+  if (rowCount > 2) {
+    // Get sheet ID
+    const sheetMetadata = await sheets.spreadsheets.get({
+      spreadsheetId: config.googleSheets.spreadsheetId,
+    });
+    const sheet = sheetMetadata.data.sheets.find(
+      (s: any) => s.properties.title === sheetName
+    );
+    const sheetId = sheet?.properties.sheetId;
+
+    if (sheetId !== undefined) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: config.googleSheets.spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              copyPaste: {
+                source: {
+                  sheetId,
+                  startRowIndex: rowCount - 2,
+                  endRowIndex: rowCount - 1,
+                  startColumnIndex: 0,
+                  endColumnIndex: 9,
+                },
+                destination: {
+                  sheetId,
+                  startRowIndex: rowCount - 1,
+                  endRowIndex: rowCount,
+                  startColumnIndex: 0,
+                  endColumnIndex: 9,
+                },
+                pasteType: 'PASTE_FORMAT',
+              },
+            },
+          ],
+        },
+      });
+    }
+  }
+
   return {
     sheet: sheetName,
     updatedRange: response.data.updates.updatedRange,

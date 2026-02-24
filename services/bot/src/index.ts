@@ -4,6 +4,7 @@ import { validateConfig } from './config.js';
 import { initSheetsClient } from './sheets.js';
 import { startServer } from './server.js';
 import { startPolling } from './polling.js';
+import { startQueueProcessor } from './queueProcessor.js';
 import { logger } from './logger.js';
 
 async function main() {
@@ -40,6 +41,14 @@ async function main() {
     startPolling();
   } catch (error: any) {
     logger.error('Failed to start polling', { error: error.message });
+    process.exit(1);
+  }
+
+  // Start queue processor (retry failed messages)
+  try {
+    startQueueProcessor();
+  } catch (error: any) {
+    logger.error('Failed to start queue processor', { error: error.message });
     process.exit(1);
   }
 

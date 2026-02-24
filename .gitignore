@@ -13,8 +13,9 @@ prompts/vision.txt
 # Keep example files in git
 !prompts/*.example.*
 
-# Telegram offset
+# Telegram offset and queue
 .telegram-offset
+message-queue.json
 
 # Dependencies
 node_modules/

@@ -28,6 +28,10 @@ export const config = {
     webhookUrl: process.env.WEBHOOK_URL,
     pollingInterval: parseInt(process.env.POLLING_INTERVAL || '300000'),
   },
+  queue: {
+    processInterval: parseInt(process.env.QUEUE_PROCESS_INTERVAL || '3600000'),
+    maxRetries: parseInt(process.env.QUEUE_MAX_RETRIES || '5'),
+  },
 };
 
 export function validateConfig(): boolean {
