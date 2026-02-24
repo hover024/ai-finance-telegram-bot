@@ -6,9 +6,17 @@ import type { SheetAction, TransactionData } from './types.js';
 let sheets: any;
 
 export function initSheetsClient() {
-  const serviceAccount = JSON.parse(
-    readFileSync(config.googleSheets.serviceAccountPath, 'utf8')
-  );
+  // Try to get credentials from environment variable first (for deployment)
+  // If not found, fall back to file (for local development)
+  let serviceAccount;
+
+  if (process.env.GOOGLE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+  } else {
+    serviceAccount = JSON.parse(
+      readFileSync(config.googleSheets.serviceAccountPath, 'utf8')
+    );
+  }
 
   const auth = new google.auth.GoogleAuth({
     credentials: serviceAccount,

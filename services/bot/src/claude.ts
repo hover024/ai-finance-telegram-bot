@@ -8,13 +8,22 @@ const anthropic = new Anthropic({
 });
 
 function loadSystemPrompt(): string {
-  const promptTemplate = readFileSync('prompt.txt', 'utf-8');
+  // Try to get prompt from environment variable first (for deployment)
+  // If not found, fall back to file (for local development)
+  const promptTemplate = process.env.SYSTEM_PROMPT
+    ? process.env.SYSTEM_PROMPT
+    : readFileSync('prompt.txt', 'utf-8');
+
   const today = new Date().toISOString().split('T')[0];
   return promptTemplate.replace('{{TODAY}}', today);
 }
 
 function loadVisionPrompt(): string {
-  return readFileSync('vision.txt', 'utf-8').trim();
+  // Try to get prompt from environment variable first (for deployment)
+  // If not found, fall back to file (for local development)
+  return process.env.VISION_PROMPT
+    ? process.env.VISION_PROMPT.trim()
+    : readFileSync('vision.txt', 'utf-8').trim();
 }
 
 const SYSTEM_PROMPT = loadSystemPrompt();
