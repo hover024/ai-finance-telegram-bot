@@ -1,11 +1,15 @@
 import { unlink, readFile } from 'fs/promises';
 import { FormData, File } from 'undici';
+import { GoogleAuth } from 'google-auth-library';
 import { config } from '../../config.js';
 import { logger } from '../../logger.js';
 import { FileProcessingError } from '../../infrastructure/errors.js';
 
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 30000;
+
+// Google Auth client for Cloud Run service-to-service authentication
+const auth = new GoogleAuth();
 
 /**
  * Whisper API Client
@@ -47,6 +51,10 @@ class WhisperClient {
       formData.append('file', audioFile);
       formData.append('response_format', 'json');
 
+      // Get identity token for service-to-service authentication
+      const client = await auth.getIdTokenClient(config.whisper.apiUrl);
+      const idToken = await client.idTokenProvider.fetchIdToken(config.whisper.apiUrl);
+
       // Make HTTP request to Whisper API
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -54,6 +62,9 @@ class WhisperClient {
       try {
         const response = await fetch(`${config.whisper.apiUrl}/inference`, {
           method: 'POST',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
           body: formData as any,
           signal: controller.signal,
         });
