@@ -128,3 +128,24 @@ jobs:
             --format='value(status.url)')
           echo "🚀 Bot deployed at: $BOT_URL"
           echo "📝 Webhook URL: $BOT_URL/webhook"
+
+      - name: Setup Telegram Webhook
+        run: |
+          TELEGRAM_BOT_TOKEN=$(gcloud secrets versions access latest --secret=telegram-bot-token)
+          WEBHOOK_SECRET=$(gcloud secrets versions access latest --secret=webhook-secret-token)
+          BOT_URL=$(gcloud run services describe finance-bot \
+            --region=${{ env.REGION }} \
+            --format='value(status.url)')
+
+          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+            -H "Content-Type: application/json" \
+            -d "{\"url\":\"${BOT_URL}/webhook\",\"secret_token\":\"${WEBHOOK_SECRET}\"}")
+
+          echo "Webhook setup response: $RESPONSE"
+
+          if echo "$RESPONSE" | jq -e '.ok == true' > /dev/null; then
+            echo "✅ Webhook configured successfully"
+          else
+            echo "❌ Webhook setup failed"
+            exit 1
+          fi
