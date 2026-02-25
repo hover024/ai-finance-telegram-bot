@@ -8,6 +8,7 @@ const app = express();
 
 // Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // Support form-urlencoded for iOS Shortcuts
 
 // Register all routes
 registerRoutes(app);
