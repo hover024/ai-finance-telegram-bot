@@ -1,7 +1,7 @@
-# Generate random webhook secret token
+# Generate random webhook secret token (only alphanumeric + underscore/dash for Telegram)
 resource "random_password" "webhook_secret" {
   length  = 32
-  special = true
+  special = false  # Telegram allows only A-Z, a-z, 0-9, _, -
 }
 
 # Generate random shortcuts API key
