@@ -86,7 +86,7 @@ resource "google_storage_bucket_iam_member" "bot_storage_admin" {
 resource "google_cloud_run_v2_service" "whisper_service" {
   name     = "whisper-service"
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_ONLY" # Only accessible from within project
+  ingress  = "INGRESS_TRAFFIC_ALL" # Public with IAM authentication
 
   template {
     service_account = google_service_account.cloud_run_sa.email
