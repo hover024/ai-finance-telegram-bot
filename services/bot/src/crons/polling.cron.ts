@@ -1,11 +1,11 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { telegramClient } from '../integrations/telegram/telegram.client.js';
 import { messageProcessorService } from '../services/message-processor.service.js';
+import { storageService } from '../services/storage.service.js';
 import type { TelegramMessage } from '../types.js';
 
-const OFFSET_FILE = '.telegram-offset';
+const OFFSET_FILE = 'telegram-offset.txt';
 
 /**
  * Parse Telegram update into normalized TelegramMessage format
@@ -47,28 +47,29 @@ function parseUpdate(update: any): TelegramMessage | null {
 }
 
 /**
- * Load the last processed update ID offset
+ * Load the last processed update ID offset from GCS
  */
-function loadOffset(): number | null {
+async function loadOffset(): Promise<number | null> {
   try {
-    if (existsSync(OFFSET_FILE)) {
-      const offset = parseInt(readFileSync(OFFSET_FILE, 'utf8').trim());
+    const content = await storageService.readFile(OFFSET_FILE);
+    if (content) {
+      const offset = parseInt(content.trim());
       return isNaN(offset) ? null : offset;
     }
   } catch (error: any) {
-    logger.warn('Failed to read offset file', { error: error.message });
+    logger.warn('Failed to read offset from storage', { error: error.message });
   }
   return null;
 }
 
 /**
- * Save the current update ID offset
+ * Save the current update ID offset to GCS
  */
-function saveOffset(offset: number): void {
+async function saveOffset(offset: number): Promise<void> {
   try {
-    writeFileSync(OFFSET_FILE, offset.toString());
+    await storageService.writeFile(OFFSET_FILE, offset.toString());
   } catch (error: any) {
-    logger.warn('Failed to save offset', { error: error.message });
+    logger.warn('Failed to save offset to storage', { error: error.message });
   }
 }
 
@@ -77,7 +78,7 @@ function saveOffset(offset: number): void {
  */
 async function pollOnce(): Promise<void> {
   try {
-    const offset = loadOffset();
+    const offset = await loadOffset();
     logger.info('Polling for updates', { offset: offset || 'start' });
 
     const updates = await telegramClient.getUpdates(offset);
@@ -115,7 +116,7 @@ async function pollOnce(): Promise<void> {
     // Save new offset
     const lastUpdateId = updates[updates.length - 1].update_id;
     const newOffset = lastUpdateId + 1;
-    saveOffset(newOffset);
+    await saveOffset(newOffset);
     logger.info('Offset updated', { newOffset });
   } catch (error: any) {
     logger.error('Polling error', { error: error.message });

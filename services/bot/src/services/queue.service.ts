@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { logger } from '../logger.js';
+import { storageService } from './storage.service.js';
 import type { TelegramMessage } from '../types.js';
 
 const QUEUE_FILE = 'message-queue.json';
@@ -22,8 +22,8 @@ class QueueService {
     try {
       let queue: QueuedMessage[] = [];
 
-      if (existsSync(QUEUE_FILE)) {
-        const content = readFileSync(QUEUE_FILE, 'utf-8');
+      const content = await storageService.readFile(QUEUE_FILE);
+      if (content) {
         queue = JSON.parse(content);
       }
 
@@ -33,7 +33,7 @@ class QueueService {
         retries: 0,
       });
 
-      writeFileSync(QUEUE_FILE, JSON.stringify(queue, null, 2));
+      await storageService.writeFile(QUEUE_FILE, JSON.stringify(queue, null, 2));
 
       logger.info('Message saved to queue', {
         messageId: message.messageId,
@@ -52,11 +52,11 @@ class QueueService {
    */
   async getQueue(): Promise<QueuedMessage[]> {
     try {
-      if (!existsSync(QUEUE_FILE)) {
+      const content = await storageService.readFile(QUEUE_FILE);
+      if (!content) {
         return [];
       }
 
-      const content = readFileSync(QUEUE_FILE, 'utf-8');
       return JSON.parse(content);
     } catch (error: any) {
       logger.error('Failed to read queue', { error: error.message });
@@ -70,12 +70,10 @@ class QueueService {
   async updateQueue(queue: QueuedMessage[]): Promise<void> {
     try {
       if (queue.length === 0) {
-        // Remove queue file if empty
-        if (existsSync(QUEUE_FILE)) {
-          writeFileSync(QUEUE_FILE, '[]');
-        }
+        // Write empty array if queue is empty
+        await storageService.writeFile(QUEUE_FILE, '[]');
       } else {
-        writeFileSync(QUEUE_FILE, JSON.stringify(queue, null, 2));
+        await storageService.writeFile(QUEUE_FILE, JSON.stringify(queue, null, 2));
       }
     } catch (error: any) {
       logger.error('Failed to update queue', { error: error.message });

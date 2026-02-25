@@ -19,6 +19,22 @@ output "webhook_secret_token" {
   sensitive   = true
 }
 
+output "shortcuts_api_key" {
+  description = "API key for iOS Shortcuts integration"
+  value       = random_password.shortcuts_api_key.result
+  sensitive   = true
+}
+
+output "shortcuts_api_url" {
+  description = "iOS Shortcuts API endpoint"
+  value       = "${google_cloud_run_v2_service.finance_bot.uri}/api/message"
+}
+
+output "storage_bucket_name" {
+  description = "GCS bucket for persistent storage"
+  value       = google_storage_bucket.bot_storage.name
+}
+
 output "artifact_registry_repo" {
   description = "Artifact Registry repository URL"
   value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.docker_repo.repository_id}"

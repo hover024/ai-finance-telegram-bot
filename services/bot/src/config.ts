@@ -34,6 +34,9 @@ export const config = {
     processInterval: parseInt(process.env.QUEUE_PROCESS_INTERVAL || '3600000'),
     maxRetries: parseInt(process.env.QUEUE_MAX_RETRIES || '5'),
   },
+  storage: {
+    bucketName: process.env.STORAGE_BUCKET_NAME || 'personal-finance-bot-storage',
+  },
 };
 
 export function validateConfig(): boolean {

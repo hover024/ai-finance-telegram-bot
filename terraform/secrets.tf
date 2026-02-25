@@ -4,6 +4,12 @@ resource "random_password" "webhook_secret" {
   special = true
 }
 
+# Generate random shortcuts API key
+resource "random_password" "shortcuts_api_key" {
+  length  = 32
+  special = false
+}
+
 # Secret Manager secrets
 resource "google_secret_manager_secret" "telegram_bot_token" {
   secret_id = "telegram-bot-token"
@@ -33,6 +39,21 @@ resource "google_secret_manager_secret" "webhook_secret_token" {
 resource "google_secret_manager_secret_version" "webhook_secret_token" {
   secret      = google_secret_manager_secret.webhook_secret_token.id
   secret_data = random_password.webhook_secret.result
+}
+
+resource "google_secret_manager_secret" "shortcuts_api_key" {
+  secret_id = "shortcuts-api-key"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.required_apis]
+}
+
+resource "google_secret_manager_secret_version" "shortcuts_api_key" {
+  secret      = google_secret_manager_secret.shortcuts_api_key.id
+  secret_data = random_password.shortcuts_api_key.result
 }
 
 resource "google_secret_manager_secret" "claude_api_key" {

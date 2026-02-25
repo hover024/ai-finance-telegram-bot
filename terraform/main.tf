@@ -54,6 +54,34 @@ resource "google_project_iam_member" "secret_accessor" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# GCS Bucket for persistent storage (offset, queue)
+resource "google_storage_bucket" "bot_storage" {
+  name          = "${var.project_id}-bot-storage"
+  location      = var.region
+  storage_class = "STANDARD"
+
+  uniform_bucket_level_access = true
+
+  lifecycle_rule {
+    condition {
+      age = 30
+      matches_prefix = ["message-queue"]
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Grant Storage access to service account
+resource "google_storage_bucket_iam_member" "bot_storage_admin" {
+  bucket = google_storage_bucket.bot_storage.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
 # Whisper Service - Cloud Run
 resource "google_cloud_run_v2_service" "whisper_service" {
   name     = "whisper-service"
@@ -171,6 +199,16 @@ resource "google_cloud_run_v2_service" "finance_bot" {
       }
 
       env {
+        name = "SHORTCUTS_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.shortcuts_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
         name  = "GOOGLE_SHEET_ID"
         value = var.google_sheet_id
       }
@@ -200,6 +238,11 @@ resource "google_cloud_run_v2_service" "finance_bot" {
         value = "5"
       }
 
+      env {
+        name  = "STORAGE_BUCKET_NAME"
+        value = google_storage_bucket.bot_storage.name
+      }
+
       resources {
         limits = {
           cpu    = "1"
@@ -224,10 +267,12 @@ resource "google_cloud_run_v2_service" "finance_bot" {
     google_cloud_run_v2_service.whisper_service,
     google_secret_manager_secret_version.telegram_bot_token,
     google_secret_manager_secret_version.webhook_secret_token,
+    google_secret_manager_secret_version.shortcuts_api_key,
     google_secret_manager_secret_version.claude_api_key,
     google_secret_manager_secret_version.google_service_account,
     google_secret_manager_secret_version.system_prompt,
     google_secret_manager_secret_version.vision_prompt,
+    google_storage_bucket.bot_storage,
   ]
 }
 
