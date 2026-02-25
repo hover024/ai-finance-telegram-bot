@@ -118,10 +118,8 @@ jobs:
             --min-instances=0 \
             --max-instances=1 \
             --service-account=personal-finance-bot@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-            --set-env-vars="WHISPER_API_URL=${{ steps.whisper-url.outputs.url }}" \
             --update-secrets="TELEGRAM_BOT_TOKEN=telegram-bot-token:latest,WEBHOOK_SECRET_TOKEN=webhook-secret-token:latest,SHORTCUTS_API_KEY=shortcuts-api-key:latest,CLAUDE_API_KEY=claude-api-key:latest,GOOGLE_SERVICE_ACCOUNT=google-service-account-json:latest,SYSTEM_PROMPT=system-prompt:latest,VISION_PROMPT=vision-prompt:latest" \
-            --set-env-vars="STORAGE_BUCKET_NAME=${{ secrets.GCP_PROJECT_ID }}-bot-storage" \
-            --update-env-vars="GOOGLE_SHEET_ID=${{ secrets.GOOGLE_SHEET_ID }},DEFAULT_ACCOUNT=${{ secrets.DEFAULT_ACCOUNT }},POLLING_INTERVAL=300000,QUEUE_PROCESS_INTERVAL=3600000,QUEUE_MAX_RETRIES=5"
+            --update-env-vars="WHISPER_API_URL=${{ steps.whisper-url.outputs.url }},STORAGE_BUCKET_NAME=${{ secrets.GCP_PROJECT_ID }}-bot-storage,GOOGLE_SHEET_ID=${{ secrets.GOOGLE_SHEET_ID }},DEFAULT_ACCOUNT=${{ secrets.DEFAULT_ACCOUNT }},POLLING_INTERVAL=300000,QUEUE_PROCESS_INTERVAL=3600000,QUEUE_MAX_RETRIES=5"
 
       - name: Get Bot Service URL
         run: |
