@@ -130,9 +130,10 @@ jobs:
           echo "📝 Webhook URL: $BOT_URL/webhook"
 
       - name: Setup Telegram Webhook
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET_TOKEN }}
         run: |
-          TELEGRAM_BOT_TOKEN=$(gcloud secrets versions access latest --secret=telegram-bot-token)
-          WEBHOOK_SECRET=$(gcloud secrets versions access latest --secret=webhook-secret-token)
           BOT_URL=$(gcloud run services describe finance-bot \
             --region=${{ env.REGION }} \
             --format='value(status.url)')
