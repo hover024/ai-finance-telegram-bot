@@ -86,10 +86,22 @@ export async function handleShortcutsMessage(req: Request, res: Response) {
     const result = await messageProcessorService.processMessage(message);
 
     if (result.success) {
+      // Extract first transaction details for response
+      const firstAction = result.actionDetails?.[0];
+      const transaction = firstAction?.data
+        ? {
+            type: firstAction.data.type,
+            amount: firstAction.data.amount,
+            currency: firstAction.data.currency,
+            category: firstAction.data.category,
+          }
+        : undefined;
+
       res.json({
         success: true,
         messageId: result.messageId,
         actions: result.actions,
+        transaction,
       });
     } else {
       res.status(500).json({

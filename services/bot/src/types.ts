@@ -31,6 +31,7 @@ export interface ProcessResult {
   success: boolean;
   messageId?: number;
   actions?: number;
+  actionDetails?: SheetAction[];
   results?: unknown[];
   error?: string;
   reason?: string;

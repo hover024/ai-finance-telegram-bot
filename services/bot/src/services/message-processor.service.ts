@@ -59,6 +59,7 @@ class MessageProcessorService {
         success: true,
         messageId: message.messageId,
         actions: actions.length,
+        actionDetails: actions,
         results,
       };
     } catch (error: any) {
